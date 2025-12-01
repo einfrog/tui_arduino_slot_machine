@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 // 8 base symbols, each is 8x8 bitmap
-extern const uint8_t SYMBOLS[8][8];
+extern const uint8_t SYMBOLS[25][8];
 
 #endif
 

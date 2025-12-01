@@ -44,7 +44,7 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // ===== SLOT MACHINE GAME CONSTANTS =====
 #define NUMREELS                3       // Use 3 reels for the game (reel 3 is for static display)
-#define NUM_SYMBOLS             8       // Total symbols in the reel (0-7)
+#define NUM_SYMBOLS             25      // Total symbols in the reel (0-7)
 #define SHIP_SYMBOL_INDEX       7       // Spaceship is symbol index 7 (last symbol)
 
 // Payout multipliers (based on wager)
@@ -98,7 +98,7 @@ void setup() {
   lcd.backlight();   
 
   // lcd.setCursor(2,0);   //Set cursor to character 2 on line 0
-  // lcd.print("Hello world!");
+  lcd.print("Hello world!");
   // Seed random number generator
   randomSeed(analogRead(0) + millis());
   
@@ -108,7 +108,7 @@ void setup() {
   // Initialize all displays (4 matrices total)
   for (int device = 0; device < 4; device++) {
     display.shutdown(device, false);
-    display.setIntensity(device, 8);
+    display.setIntensity(device, 1);
     display.clearDisplay(device);
   }
   
@@ -125,7 +125,7 @@ void setup() {
   
   // Display initial symbol on game reels (0-2)
   for (int device = 0; device < 3; device++) {
-    showSymbol(device, SYMBOLS[0]);
+    showSymbol(device, SYMBOLS[7]);
   }
   
   // Clear the 4th matrix (device 3) - can be used for static display/animations
@@ -144,8 +144,8 @@ void setup() {
 }
 
 // Display a single symbol on a specific device
-void showSymbol(int device, const uint8_t symbol[8]) {
-  for (int row = 0; row < 8; row++) {
+void showSymbol(int device, const uint8_t symbol[25]) {
+  for (int row = 0; row < 25; row++) {
     display.setRow(device, row, symbol[row]);
   }
 }
@@ -168,19 +168,19 @@ void updateReel(int reelIndex) {
   }
   
   // Create scrolling animation
-  uint8_t frame[8];
+  uint8_t frame[25];
   int nextSymbol = (reel.currentSymbol + 1) % NUM_SYMBOLS;  // Modulo 8 for 8 symbols
   
   // Build frame row by row
-  for (int row = 0; row < 8; row++) {
-    if (row < (8 - reel.scrollOffset)) {
+  for (int row = 0; row < 25; row++) {
+    if (row < (25 - reel.scrollOffset)) {
       // Still showing current symbol
       int srcRow = row + reel.scrollOffset;
       const uint8_t* currentSym = getSymbolData(reel.currentSymbol);
       frame[row] = currentSym[srcRow];
     } else {
       // Next symbol coming into view from top
-      int srcRow = row - (8 - reel.scrollOffset);
+      int srcRow = row - (25 - reel.scrollOffset);
       const uint8_t* nextSym = getSymbolData(nextSymbol);
       frame[row] = nextSym[srcRow];
     }
@@ -336,7 +336,7 @@ long calcWinnings() {
   }
   
   long roundWinnings = (long)round(winnings);
-  roundWinnings -= wagered;  // Subtract the wager (you pay whether you win or not)
+  // roundWinnings -= wagered;   // Subtract the wager (you pay whether you win or not)
   return roundWinnings;
 }
 
@@ -352,13 +352,13 @@ void displayResults(long winnings) {
   
   String winType = "No Win";
   if (shipThreeMatchCount > 0) {
-    winType = "*** JACKPOT! THREE SPACESHIPS! ***";
+    winType = "*** JACKPOT! THREE SEVENS! ***";
   } else if (threeMatchCount > 0) {
     winType = "Three of a Kind!";
   } else if (shipTwoMatchCount > 0) {
-    winType = "Two Spaceships!";
+    winType = "Two SEVENS!";
   } else if (shipOneMatchCount > 0) {
-    winType = "One Spaceship!";
+    winType = "One SEVEN!";
   } else if (twoMatchCount > 0) {
     winType = "Two of a Kind!";
   }
@@ -374,8 +374,8 @@ void displayResults(long winnings) {
   if (winnings > 0) {
     Serial.print("You WON: ");
     Serial.print(winnings);
-    lcd.setCursor(0, 1);
-    lcd.print(winnings);
+    // lcd.setCursor(0, 1);
+    // lcd.print(winnings);
     Serial.println(" credits!");
   } else if (winnings < 0) {
     Serial.print("You LOST: ");
@@ -384,10 +384,13 @@ void displayResults(long winnings) {
   } else {
     Serial.println("Break even!");
   }
-  
+  lcd.setCursor(0, 1);
+  lcd.print(winnings);
   creditBalance += winnings;
   Serial.print("New Balance: ");
   Serial.print(creditBalance);
+  lcd.setCursor(8,1);
+  lcd.print(creditBalance);
   Serial.println(" credits");
   Serial.println("==================\n");
 }
