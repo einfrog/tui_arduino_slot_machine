@@ -28,6 +28,8 @@
 #include "symbols.h"
 #include "animations.h"
 #include <LiquidCrystal_I2C.h>
+#include "SoftwareSerial.h"
+#include "DFRobotDFPlayerMini.h"
 
 const int DIN_PIN = 12;
 const int CS_PIN = 11;
@@ -37,9 +39,19 @@ const int BUTTON_PIN = 2;  // Change this to your button pin
 const int SDA_PIN = analogRead(4);
 const int SCL_PIN = analogRead(5);
 
+const int DFPLAYER_RX = 8;
+const int DFPLAYER_TX = 9;
+
 
 LedControl display = LedControl(DIN_PIN, CLK_PIN, CS_PIN, 4);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+SoftwareSerial mySoftwareSerial(DFPLAYER_RX, DFPLAYER_TX);
+DFRobotDFPlayerMini myDFPlayer;
+
+// Audio state tracking
+bool spinSoundPlaying = false;
+bool payoutSoundPlayed = false;
 
 
 // ===== SLOT MACHINE GAME CONSTANTS =====
@@ -93,6 +105,20 @@ bool waitingForWinCheck = false;
 
 void setup() {
   Serial.begin(9600);
+
+  // Initialize DFPlayer
+  mySoftwareSerial.begin(9600);
+  Serial.println(F("Initializing DFPlayer..."));
+  
+  if (!myDFPlayer.begin(mySoftwareSerial)) {
+    Serial.println(F("DFPlayer initialization failed!"));
+    Serial.println(F("1. Check the connection!"));
+    Serial.println(F("2. Insert the SD card with 001.mp3 and 002.mp3!"));
+  } else {
+    Serial.println(F("DFPlayer Mini online."));
+    myDFPlayer.volume(25);  // Set volume 0-30
+  }
+
   lcd.init();
   lcd.clear();         
   lcd.backlight();   
@@ -342,6 +368,14 @@ long calcWinnings() {
 
 // Display game results
 void displayResults(long winnings) {
+  // Stop spin sound and play payout sound
+  if (spinSoundPlaying) {
+    Serial.println("Playing payout sound...");
+    myDFPlayer.play(1);
+    spinSoundPlaying = false;
+    payoutSoundPlayed = true;
+  }
+
   Serial.println("\n=== RESULTS ===");
   Serial.print("Reels: [");
   for (int i = 0; i < NUMREELS; i++) {
@@ -422,6 +456,12 @@ void startSpin() {
   for (int i = 0; i < NUMREELS; i++) {
     spinReel(i, targets[i], 30 + (i * 10));  // Faster spin, staggered stops
   }
+
+  // Play spinning sound (track 001)
+  Serial.println("Playing spin sound...");
+  myDFPlayer.play(2);
+  spinSoundPlaying = true;
+  payoutSoundPlayed = false;
 }
 
 unsigned long lastUpdate = 0;
