@@ -27,13 +27,20 @@
 #include <LedControl.h>
 #include "symbols.h"
 #include "animations.h"
+#include <LiquidCrystal_I2C.h>
 
 const int DIN_PIN = 12;
 const int CS_PIN = 11;
 const int CLK_PIN = 10;
 const int BUTTON_PIN = 2;  // Change this to your button pin
 
+const int SDA_PIN = analogRead(4);
+const int SCL_PIN = analogRead(5);
+
+
 LedControl display = LedControl(DIN_PIN, CLK_PIN, CS_PIN, 4);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
 
 // ===== SLOT MACHINE GAME CONSTANTS =====
 #define NUMREELS                3       // Use 3 reels for the game (reel 3 is for static display)
@@ -86,7 +93,12 @@ bool waitingForWinCheck = false;
 
 void setup() {
   Serial.begin(9600);
-  
+  lcd.init();
+  lcd.clear();         
+  lcd.backlight();   
+
+  // lcd.setCursor(2,0);   //Set cursor to character 2 on line 0
+  // lcd.print("Hello world!");
   // Seed random number generator
   randomSeed(analogRead(0) + millis());
   
@@ -126,6 +138,7 @@ void setup() {
   Serial.println(creditBalance);
   Serial.print("Wager per spin: ");
   Serial.println(wagered);
+  // lcd.print(wagered);
   Serial.println("Press button to spin!");
   Serial.println("========================================");
 }
@@ -242,6 +255,7 @@ void zeroAllBalances() {
 // Check for winning combinations (works with 3 reels)
 void checkForWin() {
   // Check for spaceships (symbol index 7)
+  lcd.clear();
   for (int reelNum = 0; reelNum < NUMREELS; reelNum++) {
     if (reels[reelNum].currentSymbol == SHIP_SYMBOL_INDEX) {
       shipMatches++;
@@ -351,13 +365,17 @@ void displayResults(long winnings) {
   
   Serial.print("Win Type: ");
   Serial.println(winType);
+  lcd.print(winType);
   Serial.print("Wager: ");
   Serial.print(wagered);
   Serial.println(" credits");
+
   
   if (winnings > 0) {
     Serial.print("You WON: ");
     Serial.print(winnings);
+    lcd.setCursor(0, 1);
+    lcd.print(winnings);
     Serial.println(" credits!");
   } else if (winnings < 0) {
     Serial.print("You LOST: ");
