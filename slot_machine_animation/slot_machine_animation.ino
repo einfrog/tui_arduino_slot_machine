@@ -124,7 +124,7 @@ void setup() {
   lcd.backlight();   
 
   // lcd.setCursor(2,0);   //Set cursor to character 2 on line 0
-  lcd.print("Hello world!");
+  lcd.print("Spin to win big!");
   // Seed random number generator
   randomSeed(analogRead(0) + millis());
   
@@ -367,15 +367,36 @@ long calcWinnings() {
 }
 
 // Display game results
+// Display game results
 void displayResults(long winnings) {
-  // Stop spin sound and play payout sound
+  // Stop spin sound if still playing
   if (spinSoundPlaying) {
-    Serial.println("Playing payout sound...");
-    myDFPlayer.play(1);
+    myDFPlayer.stop();  // stop the spinning sound
     spinSoundPlaying = false;
-    payoutSoundPlayed = true;
   }
 
+  // Determine which payout sound to play
+if (shipThreeMatchCount > 0) {
+    // Jackpot: three spaceships
+    myDFPlayer.stop(); 
+    myDFPlayer.playMp3Folder(4);
+} else if (shipTwoMatchCount > 0 || threeMatchCount > 0) {
+    // Two spaceships OR three matching symbols
+    myDFPlayer.stop(); 
+    myDFPlayer.playMp3Folder(1);
+} else if (shipOneMatchCount > 0 || twoMatchCount > 0) {
+    // One spaceship OR two matching symbols
+    myDFPlayer.stop(); 
+    myDFPlayer.playMp3Folder(3);
+} else {
+    // No payout
+    myDFPlayer.stop(); 
+    myDFPlayer.playMp3Folder(5); // play sound 5 for no-win
+}
+
+  payoutSoundPlayed = true;
+
+  // --- Existing Serial and LCD output ---
   Serial.println("\n=== RESULTS ===");
   Serial.print("Reels: [");
   for (int i = 0; i < NUMREELS; i++) {
@@ -399,33 +420,16 @@ void displayResults(long winnings) {
   
   Serial.print("Win Type: ");
   Serial.println(winType);
+  lcd.clear();
   lcd.print(winType);
-  Serial.print("Wager: ");
-  Serial.print(wagered);
-  Serial.println(" credits");
-
-  
-  if (winnings > 0) {
-    Serial.print("You WON: ");
-    Serial.print(winnings);
-    // lcd.setCursor(0, 1);
-    // lcd.print(winnings);
-    Serial.println(" credits!");
-  } else if (winnings < 0) {
-    Serial.print("You LOST: ");
-    Serial.print(abs(winnings));
-    Serial.println(" credits");
-  } else {
-    Serial.println("Break even!");
-  }
   lcd.setCursor(0, 1);
   lcd.print(winnings);
+
   creditBalance += winnings;
   Serial.print("New Balance: ");
-  Serial.print(creditBalance);
+  Serial.println(creditBalance);
   lcd.setCursor(8,1);
   lcd.print(creditBalance);
-  Serial.println(" credits");
   Serial.println("==================\n");
 }
 
@@ -459,65 +463,63 @@ void startSpin() {
 
   // Play spinning sound (track 001)
   Serial.println("Playing spin sound...");
-  myDFPlayer.play(2);
+  myDFPlayer.stop(); 
+  myDFPlayer.playMp3Folder(2);
   spinSoundPlaying = true;
   payoutSoundPlayed = false;
 }
 
 unsigned long lastUpdate = 0;
+unsigned long finalReelStopTime = 0; // Tracks when the last reel stopped
 
 void loop() {
-  unsigned long currentTime = millis();
-  
-  // Button check with debouncing
-  static bool lastCheckState = HIGH;
-  static unsigned long lastButtonPress = 0;
-  bool currentButtonState = digitalRead(BUTTON_PIN);
-  
-  // Detect button press (transition from HIGH to LOW) with debounce
-  if (currentButtonState == LOW && lastCheckState == HIGH && 
-      !isAnyReelSpinning() && (currentTime - lastButtonPress > 500)) {
-    lastButtonPress = currentTime;
-    startSpin();
-  }
-  
-  lastCheckState = currentButtonState;
-  
-  // Check if all reels have stopped and we need to evaluate win
-  if (gameInProgress && !isAnyReelSpinning() && !waitingForWinCheck) {
-    waitingForWinCheck = true;
-    gameInProgress = false;
-    
-    // Small delay to show final positions
-    delay(500);
-    
-    // Check for wins and calculate payout
-    checkForWin();
-    long winnings = calcWinnings();
-    displayResults(winnings);
-  }
-  
-  // Find the fastest spinning reel to set update rate
-  int minDelay = 1000;
-  bool anySpinning = false;
-  for (int i = 0; i < NUMREELS; i++) {
-    if (reels[i].isSpinning) {
-      anySpinning = true;
-      if (reels[i].spinSpeed < minDelay) {
-        minDelay = reels[i].spinSpeed;
-      }
+    unsigned long currentTime = millis();
+
+    // ===== Button check with debouncing =====
+    static bool lastCheckState = HIGH;
+    static unsigned long lastButtonPress = 0;
+    bool currentButtonState = digitalRead(BUTTON_PIN);
+
+    if (currentButtonState == LOW && lastCheckState == HIGH && 
+        !isAnyReelSpinning() && (currentTime - lastButtonPress > 500)) {
+        lastButtonPress = currentTime;
+        startSpin();
     }
-  }
-  
-  // Update game reels (0-2) if spinning
-  if (anySpinning && (currentTime - lastUpdate >= minDelay)) {
-    lastUpdate = currentTime;
-    
+    lastCheckState = currentButtonState;
+
+    // ===== Reel spinning =====
+    int minDelay = 1000;
+    bool anySpinning = false;
     for (int i = 0; i < NUMREELS; i++) {
-      updateReel(i);
+        if (reels[i].isSpinning) {
+            anySpinning = true;
+            if (reels[i].spinSpeed < minDelay) {
+                minDelay = reels[i].spinSpeed;
+            }
+        }
     }
-  }
-  
-  // Reel 3 can be used for static display or animations
-  // (not part of the game logic)
+
+    if (anySpinning && (currentTime - lastUpdate >= minDelay)) {
+        lastUpdate = currentTime;
+        for (int i = 0; i < NUMREELS; i++) {
+            updateReel(i);
+        }
+    }
+
+    // ===== Check for reels stopped =====
+    if (gameInProgress && !isAnyReelSpinning() && finalReelStopTime == 0) {
+        finalReelStopTime = currentTime; // record the stop time
+    }
+
+    // ===== Evaluate win after a short non-blocking pause =====
+    if (finalReelStopTime != 0 && (currentTime - finalReelStopTime >= 50)) { 
+        // 50 ms pause to show final position; adjust if desired
+        gameInProgress = false;
+        finalReelStopTime = 0; // reset for next spin
+
+        checkForWin();
+        long winnings = calcWinnings();
+        displayResults(winnings);
+    }
+
 }
